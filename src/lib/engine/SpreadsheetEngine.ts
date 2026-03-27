@@ -12,39 +12,33 @@ export async function processSpreadsheet(
   onProgress(10);
   const arrayBuffer = await actualFile.arrayBuffer();
   
-  onProgress(30);
-  // Parse the workbook. SheetJS operates purely in memory locally.
-  const workbook = xlsx.read(arrayBuffer, { type: "array" });
-  
-  onProgress(60);
   let outputExtension = originalExt;
   let resultData: Uint8Array | string = "";
-
   const tl = targetFormat.toLowerCase();
 
-  // Grab the first sheet for flat exports
+  onProgress(30);
+  const xlsxDynamic = await import("xlsx");
+  const workbook = xlsxDynamic.read(arrayBuffer, { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
   const firstSheet = workbook.Sheets[firstSheetName];
 
-  if (mode === "convert") {
-    if (tl.includes("csv")) {
+  if (mode === "convert" || mode === "ai_extract") {
+     if (tl.includes("csv")) {
       outputExtension = "csv";
-      resultData = xlsx.utils.sheet_to_csv(firstSheet);
+      resultData = xlsxDynamic.utils.sheet_to_csv(firstSheet);
     } else if (tl.includes("json")) {
       outputExtension = "json";
-      resultData = JSON.stringify(xlsx.utils.sheet_to_json(firstSheet), null, 2);
+      resultData = JSON.stringify(xlsxDynamic.utils.sheet_to_json(firstSheet), null, 2);
     } else if (tl.includes("html")) {
       outputExtension = "html";
-      resultData = xlsx.utils.sheet_to_html(firstSheet);
+      resultData = xlsxDynamic.utils.sheet_to_html(firstSheet);
     } else {
       outputExtension = "xlsx";
-      resultData = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+      resultData = xlsxDynamic.write(workbook, { bookType: "xlsx", type: "array" });
     }
   } else if (mode === "compress") {
-    // "Compressing" a spreadsheet natively strips out unnecessary cache/metadata 
-    // simply by rewriting the core data structures natively into a fresh container.
     outputExtension = "xlsx";
-    resultData = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+    resultData = xlsxDynamic.write(workbook, { bookType: "xlsx", type: "array" });
   }
 
   onProgress(90);

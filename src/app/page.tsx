@@ -2,30 +2,26 @@ import { UniversalDropzone } from "@/components/universal-dropzone";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#070709] text-white selection:bg-blue-500/30 font-sans antialiased overflow-x-hidden relative flex flex-col items-center justify-center">
-      {/* Dynamic Symmetrical Ambient Lighting */}
-      <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-blue-900/10 via-purple-900/5 to-transparent pointer-events-none" />
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[60%] bg-blue-500/10 blur-[150px] rounded-full pointer-events-none mix-blend-screen" />
-      <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[60%] bg-purple-500/10 blur-[150px] rounded-full pointer-events-none mix-blend-screen" />
+    <main className="min-h-screen bg-[#070709] bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px] text-neutral-100 font-sans antialiased flex flex-col items-center">
       
-      <div className="z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20 flex flex-col items-center justify-center gap-16">
+      <div className="z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24 flex flex-col items-center justify-center gap-12">
         
-        {/* Apple-like minimalist branding Header Section */}
+        {/* Sleek, Monochrome Minimalist Header */}
         <div className="text-center space-y-6 pt-10">
-          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1 text-sm font-medium text-neutral-300 mb-4 tracking-wide shadow-xl">
-            <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"></span>
-            Zero-Server Edge Conversions
+          <div className="inline-flex items-center rounded-full border border-neutral-800 bg-neutral-900/50 px-3 py-1 text-xs font-semibold text-neutral-400 mb-2 tracking-widest uppercase shadow-sm">
+            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 mr-2"></span>
+            100% Local Execution
           </div>
-          <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-white/90 drop-shadow-sm">
-            Everything, everywhere,
+          <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-white drop-shadow-sm font-sans mb-6">
+            Everything, everywhere.
             <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">
-              all at once.
+            <span className="text-neutral-500 font-light">
+              Serverless.
             </span>
           </h1>
-          <p className="text-lg text-neutral-400/90 font-medium max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg text-neutral-400 font-medium max-w-2xl mx-auto leading-relaxed">
             mp33pm is an infinitely scalable, completely private local processing suite.
-            From heavy 4K videos to simple PDFs, run every conversion exclusively through your own hardware. 
+            Convert, Compress, and AI-Extract directly in your browser without ever uploading a file.
           </p>
         </div>
 

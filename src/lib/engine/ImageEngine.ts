@@ -1,5 +1,7 @@
 // src/lib/engine/ImageEngine.ts
 
+import { PDFDocument } from 'pdf-lib';
+
 export async function processImage(
   taskId: string,
   actualFile: File,
@@ -39,34 +41,52 @@ export async function processImage(
   let qualitySetting = 0.92; // default high quality
 
   const tl = targetFormat.toLowerCase();
+  let finalBlob: Blob;
 
   if (mode === "convert") {
-    if (tl.includes("webp")) { outputExtension = "webp"; mimeType = "image/webp"; }
-    else if (tl.includes("jpeg") || tl.includes("jpg")) { outputExtension = "jpg"; mimeType = "image/jpeg"; }
-    else if (tl.includes("png")) { outputExtension = "png"; mimeType = "image/png"; }
+     onProgress(50);
+     
+     if (tl.includes("pdf")) {
+         outputExtension = "pdf";
+         const pdfDoc = await PDFDocument.create();
+         const page = pdfDoc.addPage([canvas.width, canvas.height]);
+         
+         const imgData = canvas.toDataURL('image/jpeg', 1.0);
+         const imgBytes = await fetch(imgData).then(res => res.arrayBuffer());
+         
+         const pdfImage = await pdfDoc.embedJpg(imgBytes);
+         page.drawImage(pdfImage, { x: 0, y: 0, width: canvas.width, height: canvas.height });
+         
+         const pdfBytes = await pdfDoc.save();
+         finalBlob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+     } else {
+         const mimeType = "image/" + (tl.includes("jpg") || tl.includes("jpeg") ? "jpeg" : tl.replace(/[^a-z]/g, ""));
+         outputExtension = mimeType.split('/')[1] || "png";
+         
+         finalBlob = await new Promise<Blob>((resolve) => {
+             canvas.toBlob((blob) => resolve(blob || new Blob([])), mimeType, 1.0);
+         });
+     }
   } else if (mode === "compress") {
-    // Determine compression scale dynamically based on generic percentage tier input mapping
-    mimeType = "image/jpeg"; // Compression requires lossy container natively
-    outputExtension = "jpg";
-
-    if (tl.includes("70%")) qualitySetting = 0.8;
-    else if (tl.includes("40%")) qualitySetting = 0.5;
-    else if (tl.includes("15%")) qualitySetting = 0.2;
-    else if (tl.includes("5%")) qualitySetting = 0.05;
-
-    // Rescale image dimensions for strong & extreme compressions
-    if (tl.includes("15%")) { canvas.width *= 0.6; canvas.height *= 0.6; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); }
-    if (tl.includes("5%")) { canvas.width *= 0.3; canvas.height *= 0.3; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); }
+     onProgress(50);
+     let quality = 0.8;
+     
+     if (tl.includes("80%")) quality = 0.8;
+     if (tl.includes("50%")) quality = 0.5;
+     if (tl.includes("30%")) quality = 0.3;
+     if (tl.includes("20%")) quality = 0.2;
+     
+     // WebP compression scales incredibly accurately natively on Canvas
+     outputExtension = "webp";
+     finalBlob = await new Promise<Blob>((resolve) => {
+         canvas.toBlob((blob) => resolve(blob || new Blob([])), "image/webp", quality);
+     });
   }
 
   onProgress(85);
 
-  const blob: Blob = await new Promise((resolve) => {
-    canvas.toBlob((b) => resolve(b as Blob), mimeType, qualitySetting);
-  });
-
   onProgress(100);
   URL.revokeObjectURL(imageUrl); // Free memory buffer
 
-  return { url: URL.createObjectURL(blob), extension: outputExtension };
+  return { url: URL.createObjectURL(finalBlob!), extension: outputExtension };
 }

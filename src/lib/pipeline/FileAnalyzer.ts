@@ -43,10 +43,10 @@ export function analyzeFile(file: File): AnalyzedFile {
 
   // Dynamic Logic mapping targets for the Staging UI
   const generateDynamicCompressionTargets = (mb: number) => [
-    `70% (${formatSize(mb * 0.7)})`,
-    `40% (${formatSize(mb * 0.4)})`,
-    `15% (${formatSize(mb * 0.15)})`,
-    `5% (${formatSize(mb * 0.05)})`
+    `80% (${formatSize(mb * 0.8)})`,
+    `50% (${formatSize(mb * 0.5)})`,
+    `30% (${formatSize(mb * 0.3)})`,
+    `20% (${formatSize(mb * 0.2)})`
   ];
 
   // Logic mapping for the Staging UI
