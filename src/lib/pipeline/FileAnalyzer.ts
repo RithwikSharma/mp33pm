@@ -1,3 +1,5 @@
+import { generateDynamicCompressionTargets } from "./compressionTargets";
+
 export type FileCategory = "audio" | "video" | "document" | "spreadsheet" | "presentation" | "image" | "unknown";
 export type ActionMode = "convert" | "compress" | "ai_extract";
 
@@ -34,21 +36,6 @@ export function analyzeFile(file: File): AnalyzedFile {
   else if (presExt.includes(extension)) category = "presentation";
   else if (imgExt.includes(extension)) category = "image";
 
-  // Helper formatter for the dynamic Compression UX
-  const formatSize = (mb: number) => {
-    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-    if (mb < 1) return `${Math.round(mb * 1024)} KB`;
-    return `${Math.round(mb)} MB`;
-  };
-
-  // Dynamic Logic mapping targets for the Staging UI
-  const generateDynamicCompressionTargets = (mb: number) => [
-    `80% (${formatSize(mb * 0.8)})`,
-    `50% (${formatSize(mb * 0.5)})`,
-    `30% (${formatSize(mb * 0.3)})`,
-    `20% (${formatSize(mb * 0.2)})`
-  ];
-
   // Logic mapping for the Staging UI
   const availableModes: ActionMode[] = ["convert"];
   const modeTargets: Partial<Record<ActionMode, string[]>> = {};
@@ -67,24 +54,27 @@ export function analyzeFile(file: File): AnalyzedFile {
   
   } else if (category === "image") {
     availableModes.push("compress", "ai_extract"); 
-    modeTargets.convert = ["WebP", "PNG", "JPEG", "ICO", "BMP", "TIFF"];
+    modeTargets.convert = ["WebP", "PNG", "JPEG", "ICO", "BMP", "TIFF", "PDF"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
     modeTargets.ai_extract = ["OCR Text Transcript (.txt)", "OCR Bounding Boxes (.json)"];
   
   } else if (category === "document") {
     availableModes.push("compress", "ai_extract");
-    modeTargets.convert = ["PDF to Word (.docx)", "Extract Raw Text (.txt)", "Markdown (.md)"];
+    modeTargets.convert = ["Word (.docx)", "Extract Raw Text (.txt)", "Markdown (.md)", "PDF (.pdf)"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
-    modeTargets.ai_extract = ["Raw Text Transcript (.txt)", "Paginated Data (.json)"];
+    modeTargets.ai_extract = ["Raw Text Transcript (.txt)", "Structured JSON (.json)"];
   
   } else if (category === "presentation") {
     availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["PDF Document (.pdf)", "Word Document (.docx)", "Raw Text (.txt)"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
-    modeTargets.ai_extract = ["OCR Text Extraction on Slides"];
+    modeTargets.ai_extract = ["Slides Text Transcript (.txt)", "Slides Structured JSON (.json)"];
 
   } else if (category === "spreadsheet") {
+    availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["CSV", "XLSX", "JSON (Data Array)", "HTML Table"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
+    modeTargets.ai_extract = ["Table Transcript (.txt)", "Structured Rows JSON (.json)"];
   
   } else {
     modeTargets.convert = ["Force Binary Dump (.bin)"];

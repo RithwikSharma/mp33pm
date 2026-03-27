@@ -13,8 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mp33pm | Universal Converter",
-  description: "Unlimited client-side conversions.",
+  title: "mp33pm | Local File Conversion Suite",
+  description: "mp33pm converts, compresses, and extracts files locally in your browser.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

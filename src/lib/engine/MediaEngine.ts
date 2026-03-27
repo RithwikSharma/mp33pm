@@ -1,6 +1,9 @@
 import { getFFmpegWorker } from "./WorkerFactory";
 import { fetchFile } from "@ffmpeg/util";
 import { StorageManager } from "../pipeline/StorageManager";
+import { processAI } from "./AIEngine";
+import { parseCompressionPreset } from "../pipeline/compressionTargets";
+import { createExtractionPayload } from "./extraction";
 
 export async function processMedia(
   taskId: string,
@@ -12,7 +15,7 @@ export async function processMedia(
 ): Promise<{ url: string, extension: string }> {
   const ffmpeg = await getFFmpegWorker();
 
-  const progressHandler = ({ progress }: any) => {
+  const progressHandler = ({ progress }: { progress: number }) => {
     onProgress(Math.round(progress * 100));
   };
 
@@ -24,9 +27,165 @@ export async function processMedia(
 
   const inputName = `input_${taskId.substring(0,6)}.${originalExt}`;
   await ffmpeg.writeFile(inputName, await fetchFile(actualFile));
+  const tl = targetFormat.toLowerCase();
+
+  const cleanupInput = async () => {
+    try {
+      await ffmpeg.deleteFile(inputName);
+    } catch {
+      // noop
+    }
+    if (!originalFile) {
+      await StorageManager.removeFromOPFS(taskId);
+    }
+  };
 
   if (mode === "ai_extract") {
-    throw new Error("AI Extraction engine (Whisper) is scheduled for Phase 4. Please use Convert or Compress.");
+    // Chunk-based extraction avoids loading very large Float32 buffers at once in the browser.
+    let durationSeconds = 0;
+    const durationLogParser = ({ message }: { message: string }) => {
+      const durationMatch = message.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d+)/);
+      if (durationMatch) {
+        const h = parseInt(durationMatch[1], 10);
+        const m = parseInt(durationMatch[2], 10);
+        const s = parseFloat(durationMatch[3]);
+        durationSeconds = (h * 3600) + (m * 60) + s;
+      }
+    };
+
+    ffmpeg.on("log", durationLogParser);
+    try {
+      await ffmpeg.exec(["-i", inputName, "-f", "null", "-"]);
+    } catch {
+      // noop: this run is only used to scrape duration
+    } finally {
+      ffmpeg.off("log", durationLogParser);
+    }
+
+    const wantsJson = tl.includes("json") || tl.includes("timestamp");
+    const wantsSrt = tl.includes("srt") || tl.includes("subtitle");
+    const needsTimestamps = wantsJson || wantsSrt;
+    const aiTarget = needsTimestamps ? "Timestamped JSON Array (.json)" : "Transcript (.txt)";
+
+    // Keep chunks bounded for memory safety, but reduce total chunk count on medium-size files for throughput.
+    const chunkSeconds = actualFile.size <= 64 * 1024 * 1024 ? 300 : 120;
+    const chunkCount = durationSeconds > 0 ? Math.max(1, Math.ceil(durationSeconds / chunkSeconds)) : 1;
+    const mergedSegments: Array<{ text: string; startMs?: number; endMs?: number }> = [];
+    const mergedText: string[] = [];
+
+    for (let i = 0; i < chunkCount; i++) {
+      const startSec = i * chunkSeconds;
+      const chunkName = `extract_${taskId.substring(0, 8)}_${i}.wav`;
+      const extractionArgs = durationSeconds > 0
+        ? ["-ss", `${startSec}`, "-i", inputName, "-t", `${chunkSeconds}`, "-vn", "-ac", "1", "-ar", "16000", chunkName]
+        : ["-i", inputName, "-vn", "-ac", "1", "-ar", "16000", chunkName];
+
+      const extractionCode = await ffmpeg.exec(extractionArgs);
+      if (extractionCode !== 0) {
+        ffmpeg.off("progress", progressHandler);
+        await cleanupInput();
+        throw new Error("Failed to prepare chunked media for transcript extraction.");
+      }
+
+      const extractedData = await ffmpeg.readFile(chunkName);
+      await ffmpeg.deleteFile(chunkName);
+
+      const data = extractedData as Uint8Array;
+      if (!(data instanceof Uint8Array) || data.byteLength === 0) continue;
+
+      const audioBlob = new Blob([data as unknown as BlobPart], { type: "audio/wav" });
+      const audioFile = new File([audioBlob], `extract_${taskId}_${i}.wav`, { type: "audio/wav" });
+
+      const { url } = await processAI(
+        `${taskId}_${i}`,
+        audioFile,
+        "wav",
+        "ai_extract",
+        aiTarget,
+        (chunkProgress) => {
+          const startPct = (i / chunkCount) * 100;
+          const spanPct = 100 / chunkCount;
+          onProgress(Math.min(99, Math.round(startPct + (chunkProgress / 100) * spanPct)));
+        }
+      );
+
+      const payloadText = await fetch(url).then((res) => res.text());
+      URL.revokeObjectURL(url);
+
+      if (!needsTimestamps) {
+        if (payloadText.trim()) mergedText.push(payloadText.trim());
+        // Yield to keep the UI responsive between long-running chunks.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        continue;
+      }
+
+      try {
+        const payload = JSON.parse(payloadText) as {
+          rawText?: string;
+          segments?: Array<{ text?: string; startMs?: number; endMs?: number }>;
+        };
+
+        if (payload.rawText) mergedText.push(payload.rawText);
+        for (const segment of payload.segments || []) {
+          mergedSegments.push({
+            text: segment.text || "",
+            startMs: typeof segment.startMs === "number" ? segment.startMs + Math.round(startSec * 1000) : undefined,
+            endMs: typeof segment.endMs === "number" ? segment.endMs + Math.round(startSec * 1000) : undefined,
+          });
+        }
+      } catch {
+        if (payloadText.trim()) mergedText.push(payloadText.trim());
+      }
+
+      // Yield to keep the UI responsive between long-running chunks.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    ffmpeg.off("progress", progressHandler);
+    await cleanupInput();
+    onProgress(100);
+
+    const combinedText = mergedText.join("\n\n").trim();
+
+    if (wantsJson) {
+      const payload = createExtractionPayload({
+        engine: "media",
+        sourceExtension: originalExt,
+        rawText: combinedText,
+        segments: mergedSegments.map((segment, index) => ({
+          id: `chunk-${index}`,
+          kind: "chunk",
+          text: segment.text,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+        })),
+        metadata: {
+          chunkSeconds,
+          chunkCount,
+        },
+      });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      return { url: URL.createObjectURL(blob), extension: "json" };
+    }
+
+    if (wantsSrt) {
+      const formatSrtTime = (ms: number) => {
+        const date = new Date(ms);
+        return date.toISOString().substring(11, 23).replace('.', ',');
+      };
+
+      let srt = "";
+      mergedSegments.forEach((segment, index) => {
+        const start = segment.startMs ?? 0;
+        const end = segment.endMs ?? start + 2000;
+        srt += `${index + 1}\n${formatSrtTime(start)} --> ${formatSrtTime(end)}\n${segment.text.trim()}\n\n`;
+      });
+      const blob = new Blob([srt], { type: "text/plain;charset=utf-8" });
+      return { url: URL.createObjectURL(blob), extension: "srt" };
+    }
+
+    const blob = new Blob([combinedText], { type: "text/plain;charset=utf-8" });
+    return { url: URL.createObjectURL(blob), extension: "txt" };
   }
 
   // Determine Ext and Commands based directly on Staging logic mapped in FileAnalyzer
@@ -34,8 +193,6 @@ export async function processMedia(
   const params: string[] = ["-i", inputName];
 
   // Map Format strings into Ext
-  const tl = targetFormat.toLowerCase();
-  
   if (mode === "convert") {
     // Format Switches
     if (tl.includes("mp4")) extension = "mp4";
@@ -58,15 +215,12 @@ export async function processMedia(
      
      extension = isLosslessAudio ? "mp3" : originalExt;
 
-     let scaleFactor = 1.0;
-     if (tl.includes("80%")) scaleFactor = 0.8;
-     else if (tl.includes("50%")) scaleFactor = 0.5;
-     else if (tl.includes("30%")) scaleFactor = 0.3;
-     else if (tl.includes("20%")) scaleFactor = 0.2;
+    const preset = parseCompressionPreset(targetFormat);
+    const scaleFactor = preset / 100;
 
      // We must dynamically scrape duration via dummy executing to calculate strict mathematical Bitrate limits!
      let durationSeconds = 0;
-     const logParser = ({ message }: any) => {
+     const logParser = ({ message }: { message: string }) => {
          const durationMatch = message.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d+)/);
          if (durationMatch) {
              const h = parseInt(durationMatch[1], 10);
@@ -77,7 +231,7 @@ export async function processMedia(
      };
 
      ffmpeg.on("log", logParser);
-     try { await ffmpeg.exec(["-i", inputName, "-f", "null", "-"]); } catch(e) {} // Instigates structural parsing into stream
+    try { await ffmpeg.exec(["-i", inputName, "-f", "null", "-"]); } catch {} // Instigates structural parsing into stream
      ffmpeg.off("log", logParser);
 
      if (durationSeconds > 0) {

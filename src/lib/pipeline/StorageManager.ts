@@ -37,8 +37,8 @@ export class StorageManager {
       const root = await navigator.storage.getDirectory();
       await root.removeEntry(fileName);
       console.log(`[OPFS] Erased ${fileName} to free space.`);
-    } catch (error: any) {
-      if (error && error.name === "NotFoundError") return; // Silence harmless misses
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "NotFoundError") return; // Silence harmless misses
       console.error("[OPFS Error] Could not remove file:", error);
     }
   }

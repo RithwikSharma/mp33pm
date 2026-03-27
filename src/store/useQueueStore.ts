@@ -7,6 +7,7 @@ import { processSpreadsheet } from "@/lib/engine/SpreadsheetEngine";
 import { processImage } from "@/lib/engine/ImageEngine";
 import { processAI } from "@/lib/engine/AIEngine";
 import { processPresentation } from "@/lib/engine/PresentationEngine";
+import { calculateSizeMetrics } from "@/lib/pipeline/compressionTargets";
 
 export type FileTask = {
   id: string;
@@ -19,6 +20,12 @@ export type FileTask = {
   actionTarget?: string;
   outputUrl?: string;
   outputExtension?: string;
+  inputBytes?: number;
+  outputBytes?: number;
+  reductionPercent?: number;
+  outputRatioPercent?: number;
+  processMs?: number;
+  completedAt?: string;
   error?: string;
 };
 
@@ -85,21 +92,62 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
       setTaskStatus(task.id, "processing", { originalFile: actualFile });
 
       try {
+        const start = performance.now();
+        const inputBytes = task.analyzed.originalFile.size;
+
+        const finalize = async (url: string, extension: string) => {
+         const outputBlob = await fetch(url).then((res) => res.blob());
+         const metrics = calculateSizeMetrics(inputBytes, outputBlob.size);
+         const isCompressMode = task.actionMode === "compress";
+         setTaskStatus(task.id, "completed", {
+          outputUrl: url,
+          outputExtension: extension,
+          inputBytes,
+          outputBytes: outputBlob.size,
+          reductionPercent: isCompressMode ? metrics.reductionPercent : undefined,
+          outputRatioPercent: isCompressMode ? metrics.outputRatioPercent : undefined,
+          processMs: Math.round(performance.now() - start),
+          completedAt: new Date().toISOString(),
+          progress: 100,
+         });
+        };
+
         // Override specifically for the AI Transcription/OCR pipeline targets
         if (task.actionMode === "ai_extract") {
-           // We explicitly bypass PDF/Doc ai strings to DocumentEngine because Tesseract natively crashes on PDFs without Canvas iteration
-           if (task.analyzed.category === "document") {
+          if (task.analyzed.category === "document") {
               const { url, extension } = await processDocument(
                  task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "", 
                  (progress) => updateTaskProgress(task.id, progress)
               );
-              setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+            await finalize(url, extension);
+          } else if (task.analyzed.category === "presentation") {
+            const { url, extension } = await processPresentation(
+             task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "",
+             (progress) => updateTaskProgress(task.id, progress)
+            );
+            await finalize(url, extension);
+          } else if (task.analyzed.category === "spreadsheet") {
+            const { url, extension } = await processSpreadsheet(
+             task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "",
+             (progress) => updateTaskProgress(task.id, progress)
+            );
+            await finalize(url, extension);
+          } else if (task.analyzed.category === "video" || task.analyzed.category === "audio") {
+            const { url, extension } = await processMedia(
+             task.id,
+             actualFile,
+             task.analyzed.extension,
+             task.actionMode,
+             task.actionTarget || "",
+             (progress) => updateTaskProgress(task.id, progress)
+            );
+            await finalize(url, extension);
            } else {
               const { url, extension } = await processAI(
                  task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "", 
                  (progress) => updateTaskProgress(task.id, progress)
               );
-              setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+            await finalize(url, extension);
            }
         } else if (task.analyzed.category === "video" || task.analyzed.category === "audio") {
           const { url, extension } = await processMedia(
@@ -110,38 +158,39 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
             task.actionTarget || "", 
             (progress) => updateTaskProgress(task.id, progress)
           );
-          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+          await finalize(url, extension);
         } else if (task.analyzed.category === "document") {
           const { url, extension } = await processDocument(
             task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
             (progress) => updateTaskProgress(task.id, progress)
           );
-          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+          await finalize(url, extension);
         } else if (task.analyzed.category === "spreadsheet") {
           const { url, extension } = await processSpreadsheet(
             task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
             (progress) => updateTaskProgress(task.id, progress)
           );
-          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+          await finalize(url, extension);
         } else if (task.analyzed.category === "image") {
           const { url, extension } = await processImage(
             task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
             (progress) => updateTaskProgress(task.id, progress)
           );
-          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+          await finalize(url, extension);
         } else if (task.analyzed.category === "presentation") {
           const { url, extension } = await processPresentation(
             task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
             (progress) => updateTaskProgress(task.id, progress)
           );
-          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+          await finalize(url, extension);
         } else {
           // Fallback
           setTaskStatus(task.id, "error", { error: "Target conversion path queued for subsequent phase. Format unsupported." });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
-        setTaskStatus(task.id, "error", { error: err.message });
+        const message = err instanceof Error ? err.message : "Unknown processing error";
+        setTaskStatus(task.id, "error", { error: message });
       }
     }
   },

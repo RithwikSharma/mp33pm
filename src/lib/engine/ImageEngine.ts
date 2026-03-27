@@ -37,8 +37,6 @@ export async function processImage(
   onProgress(60);
 
   let outputExtension = originalExt;
-  let mimeType = actualFile.type || "image/png";
-  let qualitySetting = 0.92; // default high quality
 
   const tl = targetFormat.toLowerCase();
   let finalBlob: Blob;

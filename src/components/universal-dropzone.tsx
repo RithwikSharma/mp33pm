@@ -2,10 +2,17 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CloudUpload, Cpu, ShieldCheck, Play, Settings2, Trash2 } from "lucide-react";
+import { CloudUpload, Play, Trash2 } from "lucide-react";
 import { useQueueStore } from "@/store/useQueueStore";
 import { cn } from "@/lib/utils";
 import { ActionMode } from "@/lib/pipeline/FileAnalyzer";
+
+function formatBytes(bytes?: number) {
+  if (!bytes || bytes <= 0) return "-";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 export function UniversalDropzone() {
   const [isDragging, setIsDragging] = useState(false);
@@ -46,13 +53,13 @@ export function UniversalDropzone() {
   const hasStagedFiles = tasks.some(t => t.status === "staged");
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col items-center justify-center p-4 xl:p-0">
+    <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center p-4 xl:p-0">
       <motion.div
         className={cn(
-          "w-full h-80 sm:h-96 rounded-2xl border flex flex-col items-center justify-center relative overflow-hidden transition-all duration-200 cursor-pointer bg-neutral-900/30",
+          "w-full h-80 sm:h-96 rounded-2xl border flex flex-col items-center justify-center relative overflow-hidden transition-all duration-200 cursor-pointer bg-[#121417]",
           isDragging
-            ? "border-neutral-400 border-solid bg-neutral-900"
-            : "border-neutral-800 border-dashed hover:border-neutral-600 hover:bg-neutral-900/80"
+            ? "border-cyan-300/80 border-solid bg-[#191d23]"
+            : "border-[#2a2f37] border-dashed hover:border-[#4a5360] hover:bg-[#171b21]"
         )}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
         onDragEnter={handleDragEnter}
@@ -70,29 +77,18 @@ export function UniversalDropzone() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className="flex flex-col items-center"
           >
-            <div className="p-4 rounded-xl bg-neutral-800/50 border border-neutral-700/50 group-hover:bg-neutral-800 transition-colors duration-200">
-              <CloudUpload className={cn("w-10 h-10 transition-colors duration-200", isDragging ? "text-neutral-300" : "text-neutral-500 group-hover:text-neutral-300")} />
+            <div className="p-4 rounded-xl bg-[#1b2028] border border-[#2f3640] group-hover:bg-[#202632] transition-colors duration-200">
+              <CloudUpload className={cn("w-10 h-10 transition-colors duration-200", isDragging ? "text-cyan-300" : "text-[#7d8998] group-hover:text-[#c2d0e2]")} />
             </div>
           </motion.div>
 
           <div className="text-center space-y-2">
-            <h3 className="text-xl font-medium text-neutral-200 tracking-tight">
-              {isDragging ? "Drop files to stage" : "Select or drop files"}
+            <h3 className="text-xl font-semibold text-[#eef3fb] tracking-tight">
+              {isDragging ? "Drop files to build your batch" : "Select files or drag them here"}
             </h3>
-            <p className="text-sm text-neutral-500 font-normal max-w-sm mx-auto">
-              Auto-detecting Audio, Video, Docs, Excel, & Images.
+            <p className="text-sm text-[#8c97a6] font-normal max-w-sm mx-auto">
+              Assign each file its own target, then execute everything in one run.
             </p>
-          </div>
-
-          <div className="flex bg-black/40 backdrop-blur-md rounded-full px-4 py-2 mt-4 space-x-6 border border-white/5">
-            <div className="flex items-center space-x-2 text-xs text-neutral-400">
-               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-               <span>100% Private Local Edge</span>
-            </div>
-            <div className="flex items-center space-x-2 text-xs text-neutral-400">
-               <Cpu className="w-4 h-4 text-purple-400" />
-               <span>Unlimited Wasm Compute</span>
-            </div>
           </div>
         </div>
         
@@ -119,16 +115,16 @@ export function UniversalDropzone() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full mt-8 flex flex-col gap-4"
         >
-          <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-2">
-               STAGING QUEUE ({tasks.length})
+          <div className="flex items-center justify-between pb-3 border-b border-[#2b323c]">
+            <h4 className="text-xs font-bold text-[#8693a2] uppercase tracking-widest flex items-center gap-2">
+               ACTIVE BATCH ({tasks.length})
             </h4>
             {hasStagedFiles && (
               <button 
                 onClick={executePipeline}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-900 hover:bg-white transition-colors rounded-lg text-sm font-semibold border border-transparent hover:border-neutral-300 shadow-sm"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-cyan-200 text-slate-900 hover:bg-cyan-100 transition-colors rounded-lg text-sm font-semibold border border-cyan-100 shadow-sm"
               >
-                <Play className="w-4 h-4 fill-current" /> Execute
+                <Play className="w-4 h-4 fill-current" /> Run Batch
               </button>
             )}
           </div>
@@ -141,11 +137,11 @@ export function UniversalDropzone() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-neutral-900 hover:bg-neutral-800/80 transition-colors p-4 rounded-xl border border-neutral-800 gap-4"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#131820] hover:bg-[#181f29] transition-colors p-4 rounded-xl border border-[#2a313b] gap-4"
                 >
                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="text-base text-white font-medium truncate">{task.analyzed.originalFile?.name || task.id}</span>
-                      <span className="text-xs text-neutral-500 font-medium">
+                      <span className="text-base text-[#ecf1f9] font-medium truncate">{task.analyzed.originalFile?.name || task.id}</span>
+                      <span className="text-xs text-[#8f9cad] font-medium">
                         {task.analyzed.extension.toUpperCase()} • {task.analyzed.sizeMB.toFixed(2)} MB {task.analyzed.isHeavy ? "(OPFS Routed)" : "(RAM Fast)"}
                       </span>
                    </div>
@@ -153,7 +149,7 @@ export function UniversalDropzone() {
                    {task.status === "staged" ? (
                      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <select 
-                          className="bg-neutral-950 text-xs text-neutral-300 border border-neutral-800 rounded-lg px-3 py-2 outline-none focus:border-neutral-500 transition-colors"
+                          className="bg-[#0d1117] text-xs text-[#d8e1ee] border border-[#2a313b] rounded-lg px-3 py-2 outline-none focus:border-cyan-300 transition-colors"
                           value={task.actionMode || ""}
                           onChange={(e) => {
                              const mode = e.target.value as ActionMode;
@@ -169,7 +165,7 @@ export function UniversalDropzone() {
                         </select>
 
                         <select 
-                          className="bg-neutral-950 text-xs text-neutral-100 font-medium border border-neutral-800 rounded-lg px-3 py-2 outline-none focus:border-neutral-500 transition-colors"
+                          className="bg-[#0d1117] text-xs text-[#f1f6ff] font-medium border border-[#2a313b] rounded-lg px-3 py-2 outline-none focus:border-cyan-300 transition-colors"
                           value={task.actionTarget || ""}
                           onChange={(e) => updateStagedAction(task.id, task.actionMode!, e.target.value)}
                         >
@@ -178,39 +174,54 @@ export function UniversalDropzone() {
                           ))}
                         </select>
 
-                        <button onClick={() => removeTask(task.id)} className="p-2 text-neutral-600 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10 ml-2">
+                        <button onClick={() => removeTask(task.id)} className="p-2 text-[#6f7a8a] hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 ml-2">
                           <Trash2 className="w-4 h-4" />
                         </button>
                      </div>
                    ) : (
-                     <div className="flex items-center gap-4">
-                        <span className="text-xs text-neutral-500 font-medium">
-                          {task.actionMode === "convert" ? "Format" : task.actionMode === "compress" ? "Shrink" : "Neural"} ➔ <strong className="text-neutral-200 ml-1 font-mono">{task.actionTarget}</strong>
+                     <div className="flex items-center gap-4 w-full sm:w-auto">
+                        <span className="text-xs text-[#8f9cad] font-medium">
+                          {task.actionMode === "convert" ? "Format" : task.actionMode === "compress" ? "Shrink" : "Extract"} ➔ <strong className="text-[#e7eef9] ml-1 font-mono">{task.actionTarget}</strong>
                         </span>
 
                         {task.status === "processing" && (
                           <div className="flex items-center gap-3">
-                             <div className="w-32 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                               <div className="h-full bg-neutral-200 transition-all duration-200" style={{ width: `${task.progress}%` }} />
+                             <div className="w-32 h-1.5 bg-[#283140] rounded-full overflow-hidden">
+                               <div className="h-full bg-cyan-200 transition-all duration-200" style={{ width: `${task.progress}%` }} />
                              </div>
-                             <span className="text-xs font-mono text-neutral-400 w-8">{task.progress}%</span>
+                             <span className="text-xs font-mono text-[#9ba8b9] w-8">{task.progress}%</span>
                           </div>
                         )}
 
                         {task.status === "completed" && task.outputUrl && (
-                          <a href={task.outputUrl} download={`mp33pm_output_${task.id.slice(0,5)}.${task.outputExtension || 'bin'}`} className="text-xs px-4 py-1.5 rounded-lg bg-neutral-800 text-neutral-200 font-medium border border-neutral-700 hover:bg-neutral-700 hover:text-white transition-all">
-                             Download
-                          </a>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs px-2.5 py-1 rounded-md border border-[#2e3946] bg-[#0f141b] text-[#c4d1e2]">
+                              {formatBytes(task.inputBytes)} {"->"} {formatBytes(task.outputBytes)}
+                            </span>
+                            {task.actionMode === "compress" && typeof task.reductionPercent === "number" && (
+                              <span className="text-xs px-2.5 py-1 rounded-md border border-emerald-700/40 bg-emerald-900/20 text-emerald-300">
+                                Reduced {task.reductionPercent.toFixed(1)}%
+                              </span>
+                            )}
+                            {typeof task.processMs === "number" && (
+                              <span className="text-xs px-2.5 py-1 rounded-md border border-[#2e3946] bg-[#0f141b] text-[#9ba8b9]">
+                                {task.processMs} ms
+                              </span>
+                            )}
+                            <a href={task.outputUrl} download={`mp33pm_output_${task.id.slice(0,5)}.${task.outputExtension || 'bin'}`} className="text-xs px-4 py-1.5 rounded-lg bg-[#1d2631] text-[#e3ecfa] font-medium border border-[#3a4758] hover:bg-[#253140] hover:text-white transition-all">
+                              Download
+                            </a>
+                          </div>
                         )}
 
                         {task.status === "error" && (
-                          <span className="text-xs px-4 py-1.5 rounded-lg bg-red-950/50 text-red-500 font-medium border border-red-900/50">
+                          <span className="text-xs px-4 py-1.5 rounded-lg bg-red-950/40 text-red-300 font-medium border border-red-800/50">
                              Engine Failed
                           </span>
                         )}
 
                         {(task.status === "routing" || task.status === "queued") && (
-                          <span className="text-xs px-4 py-1.5 rounded-lg bg-neutral-800/50 text-neutral-400 font-medium border border-neutral-800 animate-pulse">
+                          <span className="text-xs px-4 py-1.5 rounded-lg bg-[#1a232f] text-[#9ba8b9] font-medium border border-[#2a3442] animate-pulse">
                              Routing...
                           </span>
                         )}

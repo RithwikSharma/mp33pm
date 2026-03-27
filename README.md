@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# mp33pm
 
-## Getting Started
+Browser-local file processing suite for conversion, compression, and extraction across media, documents, images, spreadsheets, and presentations.
 
-First, run the development server:
+## Local development
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Verification commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run the full verification pipeline:
 
-## Learn More
+```bash
+npm run verify:all
+```
 
-To learn more about Next.js, take a look at the following resources:
+Equivalent command sequence:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npm run test
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Test coverage currently included
 
-## Deploy on Vercel
+1. Compression target parsing and ratio metrics.
+2. Unified extraction schema validation.
+3. File analyzer category/mode/target checks.
+4. Analyzer matrix checks across representative file types.
+5. Presentation engine smoke tests for:
+	- PPTX to PDF conversion path
+	- Presentation JSON extraction
+	- Unsupported legacy PPT container rejection
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment guide
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Option A: Vercel (recommended)
+
+1. Push branch to GitHub.
+2. Import repository in Vercel.
+3. Framework preset: Next.js.
+4. Build command: `npm run build`
+5. Install command: `npm install`
+6. Output: default Next.js output.
+7. Before promoting to production, run:
+
+```bash
+npm run deploy:check
+```
+
+### Option B: Self-hosted Node
+
+1. Build on CI or server:
+
+```bash
+npm ci
+npm run verify:all
+```
+
+2. Start production server:
+
+```bash
+npm run start
+```
+
+## Runtime notes
+
+1. PDF extraction uses local worker asset: `/pdf.worker.min.mjs`.
+2. Cross-origin isolation headers are configured in [next.config.ts](next.config.ts) to support browser WASM workloads.
+3. Long media transcription is chunked to reduce memory pressure in browser runtime.
