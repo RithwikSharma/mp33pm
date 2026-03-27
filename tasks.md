@@ -1,15 +1,18 @@
 # Roadmap & Current Tasks
 
-## Phase 1: The Core Engine [IN PROGRESS]
-- [ ] Initialize Next.js with `headers.js` to enable Cross-Origin Isolation (required for FFmpeg threads).
-- [ ] Set up a 'Worker Factory' to handle `.wasm` binary loading.
-- [ ] Implement Audio-to-Audio (mp3, wav, ogg) as the MVP.
+## Phase 1: The UI & Foundation Overhaul
+- [x] Next.js 15 Foundation & Security Headers.
+- [ ] Overhaul UI: Make the Universal Dropzone extremely pleasant, Apple-like, and visually pleasing.
+- [ ] Build the "Hardware Monitor" to display system constraints to the user dynamically.
 
-## Phase 2: The "Unlimited" UI
-- [ ] Create a "Hardware Monitor" component showing the user's available RAM/CPU usage during conversion.
-- [ ] Build a "Symmetrical Palette" UI reflecting the name 'mp33pm'.
+## Phase 2: The Smart Pipeline Engine
+- [ ] Build the `SmartRouter`: Analyzes file size/type and decides memory usage strategy.
+- [ ] Implement OPFS (Origin Private File System) caching for massive files to prevent browser crashes.
+- [ ] Set up the 'Worker Factory' for dynamic, non-blocking `.wasm` binary loading.
 
-## Phase 3: Advanced Modules
-- [ ] PDF to Word (Client-side OCR via Tesseract.js if needed).
-- [ ] Audio to Transcript (Whisper.wasm integration).
-- [ ] Batch Processing (Parallel worker pool).
+## Phase 3: All-In-One Conversion Modules
+- [ ] **Media Module**: Video/Audio formats (mp4, mp3, wav, gif, etc.) via FFmpeg.
+- [ ] **Document Module**: PDF to Word, Word to PDF.
+- [ ] **Data Module**: Excel to CSV/JSON, CSV to Excel (SheetJS).
+- [ ] **AI Module**: Audio to Transcript (Whisper / Transformers.js).
+- [ ] **Image Module**: WebP, PNG, JPG fast conversions.
