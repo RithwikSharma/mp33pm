@@ -34,26 +34,40 @@ export function analyzeFile(file: File): AnalyzedFile {
   else if (presExt.includes(extension)) category = "presentation";
   else if (imgExt.includes(extension)) category = "image";
 
+  // Helper formatter for the dynamic Compression UX
+  const formatSize = (mb: number) => {
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    if (mb < 1) return `${Math.round(mb * 1024)} KB`;
+    return `${Math.round(mb)} MB`;
+  };
+
+  const generateDynamicCompressionTargets = (mb: number) => [
+    `Approx ${formatSize(mb * 0.8)} (80%)`,
+    `Approx ${formatSize(mb * 0.5)} (50%)`,
+    `Approx ${formatSize(mb * 0.25)} (25%)`,
+    `Approx ${formatSize(mb * 0.1)} (10%)`
+  ];
+
   // Logic mapping for the Staging UI
   const availableModes: ActionMode[] = ["convert"];
   const modeTargets: Partial<Record<ActionMode, string[]>> = {};
 
   if (category === "video") {
     availableModes.push("compress", "ai_extract");
-    modeTargets.convert = ["MP4 (H.264)", "WebM (VP9)", "Animated GIF", "MP3 (Extract Audio)", "WAV (Extract Audio)", "MKV"];
-    modeTargets.compress = ["High Quality (CRF 23)", "Medium Quality (CRF 28)", "Aggressive (CRF 32)", "Web Optimized (Faststart)"];
-    modeTargets.ai_extract = ["Auto-Generated Subtitles (.srt)", "Plain Text Transcript (.txt)"];
+    modeTargets.convert = ["MP4", "WebM", "GIF", "MKV", "MP3 (Audio)", "WAV (Audio)"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
+    modeTargets.ai_extract = ["Subtitles (.srt)", "Transcript (.txt)"];
   
   } else if (category === "audio") {
     availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["MP3", "WAV", "OGG", "FLAC", "M4A"];
-    modeTargets.compress = ["Voice / Podcast (64kbps)", "Standard Music (128kbps)", "High Quality Music (192kbps)", "Extreme Web Saver (32kbps)"];
-    modeTargets.ai_extract = ["Text Transcript (.txt)", "Time-stamped JSON"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
+    modeTargets.ai_extract = ["Transcript (.txt)"];
   
   } else if (category === "image") {
     availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["WebP", "PNG", "JPEG", "ICO", "BMP", "TIFF"];
-    modeTargets.compress = ["High Quality (85%)", "Standard Web (60%)", "Extreme Compression (30%)"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
     modeTargets.ai_extract = ["OCR Text Extraction (.txt)"];
   
   } else if (category === "document") {

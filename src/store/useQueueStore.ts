@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { analyzeFile, AnalyzedFile, ActionMode } from "@/lib/pipeline/FileAnalyzer";
 import { StorageManager } from "@/lib/pipeline/StorageManager";
+import { processMedia } from "@/lib/engine/MediaEngine";
 
 export type FileTask = {
   id: string;
@@ -12,6 +13,7 @@ export type FileTask = {
   actionMode?: ActionMode;
   actionTarget?: string;
   outputUrl?: string;
+  outputExtension?: string;
   error?: string;
 };
 
@@ -62,33 +64,39 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
   },
 
   executePipeline: async () => {
-    const { tasks } = get();
-    // Only lock in and route files that are currently staged
+    const { tasks, updateTaskProgress, setTaskStatus } = get();
     const stagedTasks = tasks.filter(t => t.status === "staged");
 
     for (const task of stagedTasks) {
-      // Move to routing
-      set((state) => ({
-        tasks: state.tasks.map((t) =>
-          t.id === task.id ? { ...t, status: "routing" } : t
-        ),
-      }));
+      setTaskStatus(task.id, "routing");
 
-      // Smart Route to OPFS if heavy
-      if (task.analyzed.isHeavy && task.originalFile) {
-        console.log(`[Pipeline] File ${task.analyzed.originalFile.name} routing to OPFS...`);
-        const success = await StorageManager.saveToOPFS(task.originalFile, task.id);
-        set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === task.id ? { ...t, originalFile: success ? null : t.originalFile, status: "queued" } : t
-          ),
-        }));
-      } else {
-        set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === task.id ? { ...t, status: "queued" } : t
-          ),
-        }));
+      let actualFile = task.originalFile;
+      if (task.analyzed.isHeavy && actualFile) {
+        console.log(`[Pipeline] File ${task.analyzed.originalFile?.name} routing to OPFS...`);
+        const success = await StorageManager.saveToOPFS(actualFile, task.id);
+        if (success) actualFile = null; 
+      }
+
+      setTaskStatus(task.id, "processing", { originalFile: actualFile });
+
+      try {
+        if (task.analyzed.category === "video" || task.analyzed.category === "audio") {
+          const { url, extension } = await processMedia(
+            task.id, 
+            actualFile,
+            task.analyzed.extension,
+            task.actionMode || "convert", 
+            task.actionTarget || "", 
+            (progress) => updateTaskProgress(task.id, progress)
+          );
+          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+        } else {
+          // Fallback for document/spreadsheet until their engines hook in
+          setTaskStatus(task.id, "error", { error: "Engine for this category explicitly queued for next Phase." });
+        }
+      } catch (err: any) {
+        console.error(err);
+        setTaskStatus(task.id, "error", { error: err.message });
       }
     }
   },

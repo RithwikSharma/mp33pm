@@ -185,12 +185,36 @@ export function UniversalDropzone() {
                      </div>
                    ) : (
                      <div className="flex items-center gap-4">
-                        <span className="text-xs text-neutral-400">
-                          {task.actionMode} ➔ <strong className="text-white">{task.actionTarget}</strong>
+                        <span className="text-xs text-neutral-400 font-medium">
+                          {task.actionMode === "convert" ? "Swap" : task.actionMode === "compress" ? "Compress" : "AI"} ➔ <strong className="text-white ml-1">{task.actionTarget}</strong>
                         </span>
-                        <span className="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30 uppercase tracking-wider">
-                           {task.status}
-                        </span>
+
+                        {task.status === "processing" && (
+                          <div className="flex items-center gap-3">
+                             <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden border border-white/5">
+                               <div className="h-full bg-blue-500 transition-all duration-300 shadow-[0_0_10px_rgba(59,130,246,0.8)]" style={{ width: `${task.progress}%` }} />
+                             </div>
+                             <span className="text-xs font-mono text-blue-300 w-8">{task.progress}%</span>
+                          </div>
+                        )}
+
+                        {task.status === "completed" && task.outputUrl && (
+                          <a href={task.outputUrl} download={`mp33pm_${task.id}.${task.outputExtension || 'bin'}`} className="text-xs px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 uppercase tracking-wider hover:bg-emerald-500/40 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all">
+                             Download
+                          </a>
+                        )}
+
+                        {task.status === "error" && (
+                          <span className="text-xs px-4 py-1.5 rounded-full bg-red-500/20 text-red-300 font-bold border border-red-500/30 uppercase tracking-wider">
+                             Error Loading Engine
+                          </span>
+                        )}
+
+                        {(task.status === "routing" || task.status === "queued") && (
+                          <span className="text-xs px-4 py-1.5 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30 uppercase tracking-wider animate-pulse">
+                             Routing Engine...
+                          </span>
+                        )}
                      </div>
                    )}
                 </motion.div>

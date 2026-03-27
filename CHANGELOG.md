@@ -3,9 +3,10 @@
 ## [Unreleased]
 ### Added
 - Created `CHANGELOG.md` to track project updates.
-- Initialized Next.js project with Tailwind CSS, TypeScript, and ESLint.
-- Installed required dependencies: `framer-motion`, `zustand`, `@ffmpeg/ffmpeg`, `lucide-react`, etc.
-- Configured `next.config.ts` to include `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers, and `allowedDevOrigins` for local testing.
+- Built **Phase 3 Web Worker Engine**:
+  - Implemented `WorkerFactory` to securely mount the `@ffmpeg/core-mt` multi-threaded WebAssembly binary perfectly locally via `/public/ffmpeg` bypassing any CDN limits.
+  - Built `MediaEngine` to translate advanced UI staging parameters (like CRF targets and bitrates) into explicit native ffmpeg C++ arguments natively.
+  - Linked `useQueueStore` directly into the web worker, rendering fluid progress bars for WASM computations and returning Blob URLs for native downloading!
 - Built the `SmartPipeline` architecture:
   - `FileAnalyzer`: Scans files instantly for type and size (detects `isHeavy` >100MB).
   - `StorageManager`: Utilizes the browser's Origin Private File System (OPFS) to cache heavy files to disk instead of RAM to prevent fatal crashes.

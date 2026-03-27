@@ -1,8 +1,3 @@
-Gemini said
-To get the best results from an AI agent (like Claude Code, Cursor, or Copilot), you need to provide a "System Context" message that sets the boundaries of the universe it’s working in.
-
-Copy and paste the block below into your AI chat as the first message of the session.
-
 The MP33PM Master Context Prompt
 Role: You are a Senior Full-Stack Engineer and WebAssembly (Wasm) Specialist.
 Project Name: mp33pm
