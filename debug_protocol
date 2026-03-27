@@ -1,0 +1,17 @@
+# Debugging & Verification Protocol
+
+## 1. Memory Leak Checks
+- **Protocol:** If the browser tab crashes during a large file conversion (>500MB), the agent must check the `Worker.terminate()` logic.
+- **Verification:** Ensure all `URL.createObjectURL` references are cleaned up with `URL.revokeObjectURL` after the download starts.
+
+## 2. Browser Compatibility
+- **Constraint:** FFmpeg.wasm requires `SharedArrayBuffer`.
+- **Verification:** Check if `self.crossOriginIsolated` is true. If false, the agent must write a fallback error UI explaining how to enable hardware acceleration.
+
+## 3. UI Responsiveness (The "No Freeze" Rule)
+- **Constraint:** The Main Thread must never hang.
+- **Verification:** If any heavy logic (like file hashing) is found in a React Component, the agent must move it to a Web Worker immediately.
+
+## 4. Test Suite
+- Run `npm run test:local` to simulate 10 concurrent file conversions.
+- Check for "Out of Memory" errors in the virtual browser environment.
