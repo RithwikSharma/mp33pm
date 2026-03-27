@@ -12,10 +12,11 @@ export async function processMedia(
 ): Promise<{ url: string, extension: string }> {
   const ffmpeg = await getFFmpegWorker();
 
-  ffmpeg.on("progress", ({ progress }) => {
-    // FFmpeg.wasm returns progress from 0 to 1
+  const progressHandler = ({ progress }: any) => {
     onProgress(Math.round(progress * 100));
-  });
+  };
+
+  ffmpeg.on("progress", progressHandler);
 
   // Pull from OPFS cache if file is heavy (indicated by originalFile being null)
   const actualFile = originalFile ? originalFile : await StorageManager.getFromOPFS(taskId);
@@ -59,20 +60,20 @@ export async function processMedia(
 
      // Video compression mappings dynamically mapped to user's selected % target
      if (!isAudio) {
-       if (tl.includes("80%")) params.push("-c:v", "libx264", "-crf", "25", "-preset", "fast", "-c:a", "aac");
-       if (tl.includes("50%")) params.push("-c:v", "libx264", "-crf", "28", "-preset", "fast", "-c:a", "aac");
-       if (tl.includes("25%")) params.push("-c:v", "libx264", "-crf", "34", "-preset", "veryfast", "-c:a", "aac");
-       if (tl.includes("10%")) params.push("-c:v", "libx264", "-crf", "42", "-preset", "veryfast", "-c:a", "aac");
+       if (tl.includes("70%")) params.push("-c:v", "libx264", "-crf", "25", "-preset", "fast", "-c:a", "aac");
+       if (tl.includes("40%")) params.push("-c:v", "libx264", "-crf", "28", "-preset", "fast", "-c:a", "aac");
+       if (tl.includes("15%")) params.push("-c:v", "libx264", "-crf", "34", "-preset", "veryfast", "-c:a", "aac");
+       if (tl.includes("5%")) params.push("-c:v", "libx264", "-crf", "42", "-preset", "veryfast", "-c:a", "aac");
      } else {
        // Explicit Audio Encoders to prevent header corruption for format swaps
        if (extension === "mp3") params.push("-c:a", "libmp3lame");
        else if (extension === "m4a") params.push("-c:a", "aac");
        else if (extension === "ogg") params.push("-c:a", "libvorbis");
        
-       if (tl.includes("80%")) params.push("-b:a", "192k");
-       if (tl.includes("50%")) params.push("-b:a", "128k");
-       if (tl.includes("25%")) params.push("-b:a", "64k");
-       if (tl.includes("10%")) params.push("-b:a", "32k");
+       if (tl.includes("70%")) params.push("-b:a", "192k");
+       if (tl.includes("40%")) params.push("-b:a", "128k");
+       if (tl.includes("15%")) params.push("-b:a", "64k");
+       if (tl.includes("5%")) params.push("-b:a", "32k");
      }
   }
 
@@ -97,5 +98,6 @@ export async function processMedia(
 
   // Dispatch output link (Coerce SharedArrayBuffer from MT core to BlobPart)
   const blob = new Blob([data as unknown as BlobPart], { type: 'application/octet-stream' });
+  ffmpeg.off("progress", progressHandler); // Clean up event listener to prevent overlap on sequential reruns
   return { url: URL.createObjectURL(blob), extension };
 }

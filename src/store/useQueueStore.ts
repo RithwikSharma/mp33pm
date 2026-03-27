@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { analyzeFile, AnalyzedFile, ActionMode } from "@/lib/pipeline/FileAnalyzer";
 import { StorageManager } from "@/lib/pipeline/StorageManager";
 import { processMedia } from "@/lib/engine/MediaEngine";
+import { processDocument } from "@/lib/engine/DocumentEngine";
+import { processSpreadsheet } from "@/lib/engine/SpreadsheetEngine";
+import { processImage } from "@/lib/engine/ImageEngine";
+import { processAI } from "@/lib/engine/AIEngine";
+import { processPresentation } from "@/lib/engine/PresentationEngine";
 
 export type FileTask = {
   id: string;
@@ -80,7 +85,23 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
       setTaskStatus(task.id, "processing", { originalFile: actualFile });
 
       try {
-        if (task.analyzed.category === "video" || task.analyzed.category === "audio") {
+        // Override specifically for the AI Transcription/OCR pipeline targets
+        if (task.actionMode === "ai_extract") {
+           // We explicitly bypass PDF/Doc ai strings to DocumentEngine because Tesseract natively crashes on PDFs without Canvas iteration
+           if (task.analyzed.category === "document") {
+              const { url, extension } = await processDocument(
+                 task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "", 
+                 (progress) => updateTaskProgress(task.id, progress)
+              );
+              setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+           } else {
+              const { url, extension } = await processAI(
+                 task.id, actualFile!, task.analyzed.extension, task.actionMode, task.actionTarget || "", 
+                 (progress) => updateTaskProgress(task.id, progress)
+              );
+              setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+           }
+        } else if (task.analyzed.category === "video" || task.analyzed.category === "audio") {
           const { url, extension } = await processMedia(
             task.id, 
             actualFile,
@@ -90,9 +111,33 @@ export const useQueueStore = create<QueueStore>((set, get) => ({
             (progress) => updateTaskProgress(task.id, progress)
           );
           setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+        } else if (task.analyzed.category === "document") {
+          const { url, extension } = await processDocument(
+            task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
+            (progress) => updateTaskProgress(task.id, progress)
+          );
+          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+        } else if (task.analyzed.category === "spreadsheet") {
+          const { url, extension } = await processSpreadsheet(
+            task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
+            (progress) => updateTaskProgress(task.id, progress)
+          );
+          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+        } else if (task.analyzed.category === "image") {
+          const { url, extension } = await processImage(
+            task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
+            (progress) => updateTaskProgress(task.id, progress)
+          );
+          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
+        } else if (task.analyzed.category === "presentation") {
+          const { url, extension } = await processPresentation(
+            task.id, actualFile!, task.analyzed.extension, task.actionMode || "convert", task.actionTarget || "", 
+            (progress) => updateTaskProgress(task.id, progress)
+          );
+          setTaskStatus(task.id, "completed", { outputUrl: url, outputExtension: extension, progress: 100 });
         } else {
-          // Fallback for document/spreadsheet until their engines hook in
-          setTaskStatus(task.id, "error", { error: "Engine for this category explicitly queued for next Phase." });
+          // Fallback
+          setTaskStatus(task.id, "error", { error: "Target conversion path queued for subsequent phase. Format unsupported." });
         }
       } catch (err: any) {
         console.error(err);

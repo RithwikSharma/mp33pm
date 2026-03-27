@@ -41,11 +41,12 @@ export function analyzeFile(file: File): AnalyzedFile {
     return `${Math.round(mb)} MB`;
   };
 
+  // Dynamic Logic mapping targets for the Staging UI
   const generateDynamicCompressionTargets = (mb: number) => [
-    `Approx ${formatSize(mb * 0.8)} (80%)`,
-    `Approx ${formatSize(mb * 0.5)} (50%)`,
-    `Approx ${formatSize(mb * 0.25)} (25%)`,
-    `Approx ${formatSize(mb * 0.1)} (10%)`
+    `70% (${formatSize(mb * 0.7)})`,
+    `40% (${formatSize(mb * 0.4)})`,
+    `15% (${formatSize(mb * 0.15)})`,
+    `5% (${formatSize(mb * 0.05)})`
   ];
 
   // Logic mapping for the Staging UI
@@ -56,29 +57,30 @@ export function analyzeFile(file: File): AnalyzedFile {
     availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["MP4", "WebM", "GIF", "MKV", "MP3 (Audio)", "WAV (Audio)"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
-    modeTargets.ai_extract = ["Subtitles (.srt)", "Transcript (.txt)"];
+    modeTargets.ai_extract = ["Subtitles (.srt)", "Transcript (.txt)", "Timestamped JSON Array (.json)"];
   
   } else if (category === "audio") {
     availableModes.push("compress", "ai_extract");
     modeTargets.convert = ["MP3", "WAV", "OGG", "FLAC", "M4A"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
-    modeTargets.ai_extract = ["Transcript (.txt)"];
+    modeTargets.ai_extract = ["Transcript (.txt)", "Timestamped JSON Array (.json)"];
   
   } else if (category === "image") {
-    availableModes.push("compress", "ai_extract");
+    availableModes.push("compress", "ai_extract"); 
     modeTargets.convert = ["WebP", "PNG", "JPEG", "ICO", "BMP", "TIFF"];
     modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
-    modeTargets.ai_extract = ["OCR Text Extraction (.txt)"];
+    modeTargets.ai_extract = ["OCR Text Transcript (.txt)", "OCR Bounding Boxes (.json)"];
   
   } else if (category === "document") {
-    availableModes.push("compress");
-    modeTargets.convert = ["PDF to Word (.docx)", "Word to PDF (.pdf)", "Extract Raw Text (.txt)", "Markdown (.md)"];
-    modeTargets.compress = ["PDF: Reduce Image DPI (150)", "PDF: Remove Hidden Metadata / Fonts", "DOCX: Strip Heavy Media"];
+    availableModes.push("compress", "ai_extract");
+    modeTargets.convert = ["PDF to Word (.docx)", "Extract Raw Text (.txt)", "Markdown (.md)"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
+    modeTargets.ai_extract = ["Raw Text Transcript (.txt)", "Paginated Data (.json)"];
   
   } else if (category === "presentation") {
     availableModes.push("compress", "ai_extract");
-    modeTargets.convert = ["Export to PDF", "Extract Raw Text (.txt)", "Export to Images (.png zip)"];
-    modeTargets.compress = ["Downscale Embedded Media (150 DPI)", "Strip Notes & Metadata"];
+    modeTargets.convert = ["PDF Document (.pdf)", "Word Document (.docx)", "Raw Text (.txt)"];
+    modeTargets.compress = generateDynamicCompressionTargets(sizeMB);
     modeTargets.ai_extract = ["OCR Text Extraction on Slides"];
 
   } else if (category === "spreadsheet") {
