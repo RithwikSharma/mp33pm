@@ -1,8 +1,8 @@
-import { PDFDocument, StandardFonts } from 'pdf-lib';
-import { Document, Packer, Paragraph, TextRun } from "docx";
+import { PDFDocument, StandardFonts, PDFPage } from 'pdf-lib';
+import { Document, Packer, Paragraph, TextRun, AlignmentType } from "docx";
 import mammoth from "mammoth";
 import { createExtractionPayload } from "./extraction";
-import { parseCompressionPreset } from "../pipeline/compressionTargets";
+import { parseCompressionPreset, presetToRatio } from "../pipeline/compressionTargets";
 
 export async function processDocument(
   taskId: string,
@@ -136,25 +136,28 @@ export async function processDocument(
       finalBlob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
     }
   } else if (mode === "compress") {
-    // Compression via pdf-lib (stripping metadata, flattening, rebuilding stream)
+    // Compression while preserving document structure and formatting
     if (originalExt === "pdf") {
       onProgress(30);
       try {
         const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
         onProgress(50);
 
-        // Metadata stripping is generally safe. Keep save options conservative to preserve embedded images.
+        const preset = parseCompressionPreset(targetFormat);
+        
+        // Strip metadata safely to reduce size
         pdfDoc.setTitle("");
         pdfDoc.setAuthor("");
         pdfDoc.setSubject("");
         pdfDoc.setKeywords([]);
         pdfDoc.setProducer("");
         pdfDoc.setCreator("");
-        parseCompressionPreset(targetFormat); // Keep preset parsing for future quality tiers.
 
+        // For higher compression, apply content stream compression
+        // But always preserve embedded images and structure
         const pdfBytes = await pdfDoc.save({
-          useObjectStreams: false,
-          updateFieldAppearances: false,
+          useObjectStreams: preset <= 50, // Use object streams for aggressive compression
+          updateFieldAppearances: true,
         });
         onProgress(90);
 
@@ -166,20 +169,45 @@ export async function processDocument(
         outputExtension = "pdf";
       }
     } else if (originalExt === "docx") {
-      // DOCX local compression strategy: rehydrate to plain text and rebuild a minimal document.
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      const compactDoc = new Document({
-        sections: [{
-          properties: {},
-          children: result.value.split(/\r?\n/).filter(Boolean).map((line) => new Paragraph({
-            children: [new TextRun(line)],
-          })),
-        }],
+      // DOCX compression: preserve formatting while optimizing
+      // Use mammoth to read formatting, then re-package with compression
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      const htmlContent = result.value;
+      
+      // Instead of rebuilding from scratch, apply lossless compression
+      // Keep the original DOCX structure but recompress the ZIP
+      const JSZip = await import('jszip');
+      const zip = await JSZip.default.loadAsync(arrayBuffer);
+      
+      const preset = parseCompressionPreset(targetFormat);
+      const compressionLevel = preset <= 30 ? 9 : preset <= 50 ? 8 : 6;
+      
+      // Remove only unnecessary metadata, preserve content
+      const filesToRemove = [
+        'docProps/custom.xml',
+        'word/theme/theme1.xml', // Can be stripped for aggressive compression
+      ];
+      
+      if (preset <= 30) {
+        filesToRemove.push('customXml'); // Remove custom XML for max compression
+      }
+      
+      filesToRemove.forEach(path => {
+        Object.keys(zip.files).forEach(key => {
+          if (key.includes(path)) zip.remove(key);
+        });
       });
-      finalBlob = await Packer.toBlob(compactDoc);
+      
+      const compressedZip = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: compressionLevel }
+      });
+      
+      finalBlob = compressedZip;
       outputExtension = "docx";
     } else {
-      // Text-like documents compress best as plain UTF-8 text.
+      // Text-like documents compress best as plain UTF-8
       outputExtension = "txt";
       finalBlob = new Blob([textDecoder.decode(arrayBuffer)], { type: "text/plain;charset=utf-8" });
     }

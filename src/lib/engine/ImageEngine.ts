@@ -1,6 +1,7 @@
 // src/lib/engine/ImageEngine.ts
 
 import { PDFDocument } from 'pdf-lib';
+import { parseCompressionPreset } from '../pipeline/compressionTargets';
 
 export async function processImage(
   taskId: string,
@@ -37,9 +38,9 @@ export async function processImage(
   onProgress(60);
 
   let outputExtension = originalExt;
+  let finalBlob: Blob;
 
   const tl = targetFormat.toLowerCase();
-  let finalBlob: Blob;
 
   if (mode === "convert") {
      onProgress(50);
@@ -49,36 +50,64 @@ export async function processImage(
          const pdfDoc = await PDFDocument.create();
          const page = pdfDoc.addPage([canvas.width, canvas.height]);
          
-         const imgData = canvas.toDataURL('image/jpeg', 1.0);
+         // Use lossless conversion to PDF to maintain image quality
+         const imgData = canvas.toDataURL('image/png', 1.0);
          const imgBytes = await fetch(imgData).then(res => res.arrayBuffer());
          
-         const pdfImage = await pdfDoc.embedJpg(imgBytes);
+         const pdfImage = await pdfDoc.embedPng(imgBytes);
          page.drawImage(pdfImage, { x: 0, y: 0, width: canvas.width, height: canvas.height });
          
          const pdfBytes = await pdfDoc.save();
          finalBlob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+     } else if (tl.includes("webp")) {
+         outputExtension = "webp";
+         // For conversion to WebP, use high quality to preserve original
+         finalBlob = await new Promise<Blob>((resolve) => {
+             canvas.toBlob((blob) => resolve(blob || new Blob([])), "image/webp", 0.95);
+         });
      } else {
          const mimeType = "image/" + (tl.includes("jpg") || tl.includes("jpeg") ? "jpeg" : tl.replace(/[^a-z]/g, ""));
          outputExtension = mimeType.split('/')[1] || "png";
          
+         // For conversion, prioritize quality (use high quality parameter)
+         const quality = tl.includes("jpg") || tl.includes("jpeg") ? 0.95 : 1.0;
          finalBlob = await new Promise<Blob>((resolve) => {
-             canvas.toBlob((blob) => resolve(blob || new Blob([])), mimeType, 1.0);
+             canvas.toBlob((blob) => resolve(blob || new Blob([])), mimeType, quality);
          });
      }
   } else if (mode === "compress") {
      onProgress(50);
-     let quality = 0.8;
      
-     if (tl.includes("80%")) quality = 0.8;
-     if (tl.includes("50%")) quality = 0.5;
-     if (tl.includes("30%")) quality = 0.3;
-     if (tl.includes("20%")) quality = 0.2;
+     const preset = parseCompressionPreset(targetFormat);
      
-     // WebP compression scales incredibly accurately natively on Canvas
-     outputExtension = "webp";
-     finalBlob = await new Promise<Blob>((resolve) => {
-         canvas.toBlob((blob) => resolve(blob || new Blob([])), "image/webp", quality);
-     });
+     // Map compression presets to quality levels
+     // Higher quality ensures visual fidelity while still reducing file size
+     const qualityMap: Record<number, number> = {
+       80: 0.85,  // 80% - minimal compression, high quality
+       50: 0.70,  // 50% - balanced compression
+       30: 0.50,  // 30% - aggressive compression but still acceptable
+       20: 0.35,  // 20% - maximum compression
+     };
+     
+     const quality = qualityMap[preset] || 0.70;
+     
+     // Choose output format based on image type and compression goals
+     // PNG is lossless (poor compression), JPEG is lossy (good compression)
+     // WebP is superior to both in modern browsers
+     
+     if (originalExt === 'png' || !tl.includes('jpg') && !tl.includes('jpeg')) {
+       // For PNG or when not specifying format, use WebP for best compression
+       outputExtension = "webp";
+       finalBlob = await new Promise<Blob>((resolve) => {
+           canvas.toBlob((blob) => resolve(blob || new Blob([])), "image/webp", quality);
+       });
+     } else {
+       // For JPEG input, maintain format
+       outputExtension = "jpg";
+       finalBlob = await new Promise<Blob>((resolve) => {
+           canvas.toBlob((blob) => resolve(blob || new Blob([])), "image/jpeg", quality);
+       });
+     }
   }
 
   onProgress(85);

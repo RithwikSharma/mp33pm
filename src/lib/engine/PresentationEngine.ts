@@ -272,27 +272,90 @@ export async function processPresentation(
              finalBlob = new Blob([extractedText], { type: "text/plain;charset=utf-8" });
           }
       } else if (mode === "compress") {
-       // Compression natively on an XML Container Zip means erasing internal media / stripping bloat
-       // We can iterate the zip and delete massive images inside ppt/media
-       onProgress(40);
-       const mediaFolders = Object.keys(zip.files).filter(name => name.startsWith('ppt/media/'));
-
-          const preset = parseCompressionPreset(targetFormat);
-          if (preset <= 50) {
-             // Remove large media first for heavier compression tiers.
-             for (const file of mediaFolders) {
-                const bin = await zip.files[file].async("uint8array");
-                if (preset <= 30 || bin.byteLength > 400_000) zip.remove(file);
-             }
+        // Smart image compression while preserving presentation structure and layout
+        onProgress(40);
+        
+        const mediaFolders = Object.keys(zip.files).filter(name => name.startsWith('ppt/media/'));
+        const preset = parseCompressionPreset(targetFormat);
+        
+        // Define quality levels based on compression preset
+        // Instead of deleting, intelligently compress images
+        const qualityMap: Record<number, number> = {
+          80: 0.85,  // 80% - high quality, minimal compression
+          50: 0.65,  // 50% - balanced quality and size
+          30: 0.45,  // 30% - aggressive compression but still visible
+          20: 0.30,  // 20% - maximum compression
+        };
+        
+        const targetQuality = qualityMap[preset] || 0.65;
+        
+        // Process each image - compress instead of delete
+        for (const filePath of mediaFolders) {
+          try {
+            const file = zip.files[filePath];
+            const bytes = await file.async("uint8array");
+            const ext = filePath.split('.').pop()?.toLowerCase() || "";
+            
+            // Only process JPEG and PNG images; skip SVG and other formats
+            if (!['jpg', 'jpeg', 'png'].includes(ext)) continue;
+            
+            // Create canvas for compression
+            const blob = new Blob([bytes]);
+            const imgUrl = URL.createObjectURL(blob);
+            
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = () => reject(new Error(`Failed to load image: ${filePath}`));
+              img.src = imgUrl;
+            });
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+              URL.revokeObjectURL(imgUrl);
+              continue;
+            }
+            
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(imgUrl);
+            
+            // Compress to JPEG with quality setting
+            const compressedBlob = await new Promise<Blob>((resolve) => {
+              canvas.toBlob(
+                (blob) => resolve(blob || new Blob([])),
+                'image/jpeg',
+                targetQuality
+              );
+            });
+            
+            const compressedBytes = await compressedBlob.arrayBuffer();
+            zip.file(filePath.replace(/\.(png|jpg|jpeg)$/i, '.jpg'), compressedBytes);
+            zip.remove(filePath); // Remove original
+            
+          } catch (error) {
+            // If compression fails, keep original to preserve presentation integrity
+            console.warn(`[PresentationEngine] Failed to compress ${filePath}, keeping original:`, error);
           }
-       
-       onProgress(70);
-          const zipLevel = preset === 80 ? 6 : 9;
-          const newZipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: zipLevel } });
-       finalBlob = newZipBlob;
-          outputExtension = "pptx";
-       onProgress(90);
-    }
+        }
+        
+        onProgress(70);
+        
+        // Recompress the ZIP with optimal compression level
+        const zipLevel = preset <= 30 ? 9 : preset <= 50 ? 8 : 6;
+        const newZipBlob = await zip.generateAsync({
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: zipLevel }
+        });
+        
+        finalBlob = newZipBlob;
+        outputExtension = "pptx";
+        onProgress(90);
+      }
   
 
   onProgress(100);
